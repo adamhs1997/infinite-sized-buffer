@@ -2,11 +2,11 @@ package adamhs1997.infinitesizedbuffer;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 
 /*
 Create buffer of fixed size
@@ -28,13 +28,10 @@ public class InfiniteSizedBuffer {
     static int globalSize = 0;
     static double dumpPoint = 0.9; // %
     static int bufSize = 50; // Should be (effectively) INF in the production code to support arbitrary length buffer
-    
-    // Set up file output buffer
-    static DataOutputStream dos;
-    
-    public static void main(String[] args) throws FileNotFoundException, IOException {     
-        dos = new DataOutputStream(new FileOutputStream("balls.bin"));
-        
+    static String fnameBase = "balls";
+    static int fileCtr = 0;
+
+    public static void main(String[] args) throws FileNotFoundException, IOException {
         // Write into buffer
         for (int i = 0; i < bufSize; i++) {
             d[headPtr] = i;
@@ -43,52 +40,47 @@ public class InfiniteSizedBuffer {
                 dumpData();
             }
         }
-        
-        dos.close();
-        
-        double[] in = new double[50];
-        DataInputStream dis = new DataInputStream(new FileInputStream("balls.bin"));
-        for (int i = 0; i < in.length - headPtr; i++) {
-            in[i] = dis.readDouble();
-        }
-        
-        System.out.println(Arrays.toString(in));
-        System.out.println(Arrays.toString(d));
-        
-        dis.close();
-        dis = new DataInputStream(new FileInputStream("balls.bin"));
-        
+
+        fileCtr--;
         // Read buffer back, reading file data when we hit uncached stuff
-        for (int i = globalSize; i > 0; i--) {
+        for (int k = globalSize; k > 0; k--) {
             // Retrieve more data when we need it
             if (headPtr == 0) {
-                for (int j = 0; j < d.length; j++) {
-                    d[j] = dis.readDouble();
+                DataInputStream dis = new DataInputStream(
+                    new FileInputStream(fnameBase + fileCtr-- + ".bin"));
+                while (true) {
+                    try {
+                        d[headPtr] = dis.readDouble();
+                        headPtr++;
+                    } catch (EOFException e) {
+                        break;
+                    }
                 }
-                headPtr = d.length;
+                dis.close();
             }
-            
+
             System.out.println(d[headPtr - 1]);
+
             headPtr--;
-            
-//            System.out.println(d[(i - 1) % d.length]);
-//            System.out.printf("%d %d\n", i, (i - 1) % d.length);
         }
     }
-    
+
     private static void dumpData() throws IOException {
         // Dump the data in the buffer to the file
+        DataOutputStream dos = new DataOutputStream(new FileOutputStream(
+                fnameBase + fileCtr++ + ".bin"));
         int stopIdx = (int) (dumpPoint * d.length);
-        
+
         for (int i = 0; i < stopIdx; i++) {
             dos.writeDouble(d[i]);
         }
-        
+
         // Move any data at end of array to start
         headPtr = d.length - stopIdx;
         for (int i = stopIdx; i < d.length; i++) {
             d[i - stopIdx] = d[i];
         }
+        dos.close();
     }
-    
+
 }
