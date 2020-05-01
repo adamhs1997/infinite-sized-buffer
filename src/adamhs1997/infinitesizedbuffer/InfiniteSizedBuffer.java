@@ -3,6 +3,7 @@ package adamhs1997.infinitesizedbuffer;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -63,6 +64,12 @@ public class InfiniteSizedBuffer {
 
             headPtr--;
         }
+
+        // Clean up files
+        new File(".").listFiles(f -> {
+            if (f.getName().endsWith(".bin")) f.delete();
+            return true;
+        });
     }
 
     private static void dumpData() throws IOException {
@@ -82,5 +89,4 @@ public class InfiniteSizedBuffer {
         }
         dos.close();
     }
-
 }
