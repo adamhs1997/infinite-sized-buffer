@@ -18,32 +18,47 @@ public class InfiniteSizedBuffer implements AutoCloseable {
     private int fileCtr;         // number of data files
     private int maxFileCtr;      // curent last file block on disk
     private boolean currentOut;  // determine if current data is out of memory
-    private final String FNAME_BASE;     // base dir path to bin files
+    private final String DIR_NAME_BASE;     // base dir path to bin files
 
-    InfiniteSizedBuffer(int inMemSize, double pctInMem, String fnameBase) {
+    /**
+     * Construct new InfiniteSizedBuffer object.
+     * @param inMemSize Maximum number of buffer elements to keep in memory.
+     * @param pctInMem Percent of elements to retain when data paged to disk.
+     * @param dirNameBase Base directory name to write buffer files to.
+     */
+    InfiniteSizedBuffer(int inMemSize, double pctInMem, String dirNameBase) {
         buffer = new double[inMemSize];
         stopIdx = buffer.length - (int) ((pctInMem / 100) * buffer.length);
         headPtr = 0;
         bufferSize = 0;
         fileCtr = 0;
         maxFileCtr = 0;
-        FNAME_BASE = fnameBase;
+        DIR_NAME_BASE = dirNameBase;
 
         // Create parent directory if it doesn't exist
-        File f = new File(FNAME_BASE);
+        File f = new File(DIR_NAME_BASE);
         if (!f.getParentFile().exists()) {
             f.mkdirs();
         }
     }
 
+    /**
+     * Construct new InfiniteSizedBuffer object with default data directory.
+     * @param inMemSize Maximum number of buffer elements to keep in memory.
+     * @param pctInMem Base directory name to write buffer files to.
+     */
     InfiniteSizedBuffer(int inMemSize, double pctInMem) {
         this(inMemSize, pctInMem, "data_bin/buf_data");
     }
 
+    /**
+     * Write an item into the buffer.
+     * @param data Data item to write.
+     */
     public void writeData(double data) {
         // If most current data is not in memory, load it back in
         if (currentOut) {
-            loadBlock(FNAME_BASE + "x.bin");
+            loadBlock(DIR_NAME_BASE + "x.bin");
             currentOut = false;
 
             // Reset file counter to last block
@@ -60,6 +75,10 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         }
     }
 
+    /**
+     * Read an item from the buffer.
+     * @return Newest item in the buffer.
+     */
     public double readData() {
         // Retrieve more data when we need it
         if (headPtr == 0) {
@@ -70,7 +89,7 @@ public class InfiniteSizedBuffer implements AutoCloseable {
                 fileCtr--;
             }
 
-            loadBlock(FNAME_BASE + fileCtr-- + ".bin");
+            loadBlock(DIR_NAME_BASE + fileCtr-- + ".bin");
         }
 
         // Update head pointer location
@@ -79,22 +98,33 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         return buffer[headPtr];
     }
 
+    /**
+     * Return actual size of buffer (combination of the number of elements in
+     * memory and on disk).
+     * @return The size of the buffer.
+     */
     public int getBufferSize() {
         return bufferSize;
     }
 
+    /**
+     * Close and clean up the buffer, removing all items paged to disk.
+     */
     @Override
     public void close() {
-        new File(FNAME_BASE).getParentFile().listFiles(f -> {
+        new File(DIR_NAME_BASE).getParentFile().listFiles(f -> {
             if (f.getName().endsWith(".bin")) f.delete();
             return true;
         });
     }
 
+    /**
+     * Dumps oldest data out of memory and onto disk.
+     */
     private void dumpData() {
         // Dump the data in the buffer to the file
         try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(
-          FNAME_BASE + fileCtr++ + ".bin"))) {
+          DIR_NAME_BASE + fileCtr++ + ".bin"))) {
             // Write out anything in the buffer up until the stop index
             for (int i = 0; i < stopIdx; i++) {
                 dos.writeDouble(buffer[i]);
@@ -114,9 +144,14 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         }
     }
 
+    /**
+     * Writes current buffer of data to disk. This is necessary only when an
+     * older block of data is loaded into memory to be read. The purpose of this
+     * method is to save off the newest data so it can be recovered.
+     */
     private void writeInMemData() {
         try (DataOutputStream dos = new DataOutputStream(
-          new FileOutputStream(FNAME_BASE + "x.bin"))) {
+          new FileOutputStream(DIR_NAME_BASE + "x.bin"))) {
             // Write out anything in the buffer
             for (int i = 0; i < maxHeadPtr; i++) {
                 dos.writeDouble(buffer[i]);
@@ -126,6 +161,10 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         }
     }
 
+    /**
+     * Load a data block back into memory.
+     * @param blockName Name of (path to) the data block to retrieve.
+     */
     private void loadBlock(String blockName) {
         try (DataInputStream dis = new DataInputStream(
           new FileInputStream(blockName))) {
@@ -145,13 +184,14 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         }
     }
 
+    // For testing...
     public static void main(String[] args) {
         try (InfiniteSizedBuffer isb = new InfiniteSizedBuffer(10, 30)) {
             int bufSize = 100;
             // Write into buffer
             for (int i = 0; i < bufSize; i++) {
                 isb.writeData(i);
-                
+
                 // Simulate some reads interrupting the write stream
                 if (i == 23) {
                     for (int j = 0; j < 7; j++) {
