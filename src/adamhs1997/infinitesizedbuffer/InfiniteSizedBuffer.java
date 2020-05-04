@@ -12,6 +12,7 @@ import java.util.Arrays;
 public class InfiniteSizedBuffer implements AutoCloseable {
 
     private double[] buffer;     // array to back the buffer
+    private int stopIdx;         // where copying in array stops during dump
     private int headPtr;         // current position in true buffer array
     private int maxHeadPtr;      // current maximum number of values in buffer
     private int bufferSize;      // number of elements in buffer
@@ -20,8 +21,9 @@ public class InfiniteSizedBuffer implements AutoCloseable {
     private boolean currentOut;  // determine if current data is out of memory
     private final String FNAME_BASE;     // base dir path to bin files
 
-    InfiniteSizedBuffer(int inMemSize, String fnameBase) {
+    InfiniteSizedBuffer(int inMemSize, double pctInMem, String fnameBase) {
         buffer = new double[inMemSize];
+        stopIdx = buffer.length - (int) ((pctInMem / 100) * buffer.length);
         headPtr = 0;
         bufferSize = 0;
         fileCtr = 0;
@@ -35,8 +37,8 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         }
     }
 
-    InfiniteSizedBuffer(int inMemSize) {
-        this(inMemSize, "data_bin/buf_data");
+    InfiniteSizedBuffer(int inMemSize, double pctInMem) {
+        this(inMemSize, pctInMem, "data_bin/buf_data");
     }
 
     public void writeData(double data) {
@@ -92,16 +94,16 @@ public class InfiniteSizedBuffer implements AutoCloseable {
 
     private void dumpData() {
         // Dump the data in the buffer to the file
+        long s = System.currentTimeMillis();
         try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(
           FNAME_BASE + fileCtr++ + ".bin"))) {
-            // Write out anything in the buffer
-            int stopIdx = buffer.length;
+            // Write out anything in the buffer up until the stop index
             for (int i = 0; i < stopIdx; i++) {
                 dos.writeDouble(buffer[i]);
             }
 
             // Move any data at end of array to start
-            headPtr = 0;
+            headPtr = buffer.length - stopIdx;
             maxHeadPtr = headPtr;
             for (int i = stopIdx; i < buffer.length; i++) {
                 buffer[i - stopIdx] = buffer[i];
@@ -112,6 +114,7 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         } catch (IOException exc) {
             System.err.println("Failed to dump data!");
         }
+        System.out.println("dump " + (System.currentTimeMillis() - s));
     }
 
     private void writeInMemData() {
@@ -148,33 +151,32 @@ public class InfiniteSizedBuffer implements AutoCloseable {
     }
 
     public static void main(String[] args) {
-        try (InfiniteSizedBuffer isb = new InfiniteSizedBuffer(1000000)) {
-            int bufSize = 10000000;
+        try (InfiniteSizedBuffer isb = new InfiniteSizedBuffer(10, 30)) {
+            int bufSize = 100;
             // Write into buffer
             for (int i = 0; i < bufSize; i++) {
                 isb.writeData(i);
 //                System.out.println(Arrays.toString(isb.buffer));
 
                 // Simulate some reads interrupting the write stream
-//                if (i == 23) {
-//                    for (int j = 0; j < 7; j++) {
-//                        System.out.println(isb.readData());
-//                    }
-//                    System.out.println("----");
-//                }
-//
-//                if (i == 44) {
-//                    for (int j = 0; j < 23; j++) {
-//                        System.out.println(isb.readData());
-//                    }
-//                    System.out.println("----");
-//                }
+                if (i == 23) {
+                    for (int j = 0; j < 7; j++) {
+                        System.out.println(isb.readData());
+                    }
+                    System.out.println("----");
+                }
+
+                if (i == 44) {
+                    for (int j = 0; j < 23; j++) {
+                        System.out.println(isb.readData());
+                    }
+                    System.out.println("----");
+                }
             }
 
             // Recover all data from buffer
             for (int i = isb.getBufferSize(); i > 0; i--) {
-//                System.out.println(isb.readData());
-                isb.readData();
+                System.out.println(isb.readData());
             }
         }
     }
