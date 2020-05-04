@@ -7,7 +7,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 
 public class InfiniteSizedBuffer implements AutoCloseable {
 
@@ -94,7 +93,6 @@ public class InfiniteSizedBuffer implements AutoCloseable {
 
     private void dumpData() {
         // Dump the data in the buffer to the file
-        long s = System.currentTimeMillis();
         try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(
           FNAME_BASE + fileCtr++ + ".bin"))) {
             // Write out anything in the buffer up until the stop index
@@ -114,7 +112,6 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         } catch (IOException exc) {
             System.err.println("Failed to dump data!");
         }
-        System.out.println("dump " + (System.currentTimeMillis() - s));
     }
 
     private void writeInMemData() {
@@ -130,7 +127,6 @@ public class InfiniteSizedBuffer implements AutoCloseable {
     }
 
     private void loadBlock(String blockName) {
-        long s = System.currentTimeMillis();
         try (DataInputStream dis = new DataInputStream(
           new FileInputStream(blockName))) {
             headPtr = 0;
@@ -147,7 +143,6 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         } catch (IOException e) {
             System.err.println("Could not read data!");
         }
-        System.out.println("load " + (System.currentTimeMillis() - s));
     }
 
     public static void main(String[] args) {
@@ -156,8 +151,7 @@ public class InfiniteSizedBuffer implements AutoCloseable {
             // Write into buffer
             for (int i = 0; i < bufSize; i++) {
                 isb.writeData(i);
-//                System.out.println(Arrays.toString(isb.buffer));
-
+                
                 // Simulate some reads interrupting the write stream
                 if (i == 23) {
                     for (int j = 0; j < 7; j++) {
