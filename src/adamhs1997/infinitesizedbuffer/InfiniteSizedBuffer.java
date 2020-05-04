@@ -22,12 +22,13 @@ public class InfiniteSizedBuffer implements AutoCloseable {
 
     private double[] buffer;     // array to back the buffer
     private int headPtr;         // current position in true buffer array
+    private int maxHeadPtr;      // current maximum number of values in buffer
     private int bufferSize;      // number of elements in buffer
     private double dumpPoint;    // percentage of size at which we begin dumping
     private int fileCtr;         // number of data files
-    private boolean writeMode;   // determine if user is reading or writing
+    private int maxFileCtr;      // curent last file block on disk
     private boolean currentOut;  // determine if current data is out of memory
-    final String FNAME_BASE;     // base dir path to bin files
+    private final String FNAME_BASE;     // base dir path to bin files
 
     InfiniteSizedBuffer(int inMemSize, double dumpPct, String fnameBase) {
         buffer = new double[inMemSize];
@@ -35,6 +36,7 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         bufferSize = 0;
         dumpPoint = dumpPct / 100;
         fileCtr = 0;
+        maxFileCtr = 0;
         FNAME_BASE = fnameBase;
 
         // Create parent directory if it doesn't exist
@@ -48,32 +50,20 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         this(inMemSize, dumpPct, "data_bin/buf_data");
     }
 
-    public static void main(String[] args) {
-        try (InfiniteSizedBuffer isb = new InfiniteSizedBuffer(10, 90)) {
-            int bufSize = 50;
-            // Write into buffer
-            for (int i = 0; i < bufSize; i++) {
-                isb.writeData(i);
-            }
-
-            for (int i = isb.getBufferSize(); i > 0; i--) {
-                System.out.println(isb.readData());
-            }
-        }
-    }
-
     public void writeData(double data) {
-        writeMode = true;
-
         // If most current data is not in memory, load it back in
         if (currentOut) {
             loadBlock(FNAME_BASE + "x.bin");
             currentOut = false;
+
+            // Reset file counter to last block
+            fileCtr = maxFileCtr;
         }
 
         // Write given data
         buffer[headPtr] = data;
         bufferSize++;
+        maxHeadPtr++;
 
         if (++headPtr > dumpPoint * buffer.length) {
             dumpData();
@@ -81,8 +71,6 @@ public class InfiniteSizedBuffer implements AutoCloseable {
     }
 
     public double readData() {
-        writeMode = false;
-
         // Retrieve more data when we need it
         if (headPtr == 0) {
             // If the current data is still in, must evict it
@@ -125,9 +113,13 @@ public class InfiniteSizedBuffer implements AutoCloseable {
 
             // Move any data at end of array to start
             headPtr = buffer.length - stopIdx;
+            maxHeadPtr = headPtr;
             for (int i = stopIdx; i < buffer.length; i++) {
                 buffer[i - stopIdx] = buffer[i];
             }
+
+            // Incrememnt max file counter
+            maxFileCtr++;
         } catch (IOException exc) {
             System.err.println("Failed to dump data!");
         }
@@ -137,7 +129,7 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         try (DataOutputStream dos = new DataOutputStream(
           new FileOutputStream(FNAME_BASE + "x.bin"))) {
             // Write out anything in the buffer
-            for (int i = 0; i < headPtr; i++) {
+            for (int i = 0; i < maxHeadPtr; i++) {
                 dos.writeDouble(buffer[i]);
             }
         } catch (IOException exc) {
@@ -149,6 +141,7 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         try (DataInputStream dis = new DataInputStream(
           new FileInputStream(blockName))) {
             headPtr = 0;
+            maxHeadPtr = 0;
             while (true) {
                 try {
                     buffer[headPtr] = dis.readDouble();
@@ -157,8 +150,39 @@ public class InfiniteSizedBuffer implements AutoCloseable {
                     break;
                 }
             }
+            maxHeadPtr = headPtr;
         } catch (IOException e) {
             System.err.println("Could not read data!");
+        }
+    }
+
+    public static void main(String[] args) {
+        try (InfiniteSizedBuffer isb = new InfiniteSizedBuffer(10, 90)) {
+            int bufSize = 50;
+            // Write into buffer
+            for (int i = 0; i < bufSize; i++) {
+                isb.writeData(i);
+
+                // Simulate some reads interrupting the write stream
+                if (i == 23) {
+                    for (int j = 0; j < 7; j++) {
+                        System.out.println(isb.readData());
+                    }
+                    System.out.println("----");
+                }
+
+                if (i == 44) {
+                    for (int j = 0; j < 23; j++) {
+                        System.out.println(isb.readData());
+                    }
+                    System.out.println("----");
+                }
+            }
+
+            // Recover all data from buffer
+            for (int i = isb.getBufferSize(); i > 0; i--) {
+                System.out.println(isb.readData());
+            }
         }
     }
 }
