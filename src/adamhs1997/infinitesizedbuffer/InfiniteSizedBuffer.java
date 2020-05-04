@@ -5,7 +5,6 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
@@ -28,14 +27,15 @@ public class InfiniteSizedBuffer implements AutoCloseable {
     private int fileCtr;         // number of data files
     private boolean writeMode;   // determine if user is reading or writing
     private boolean currentOut;  // determine if current data is out of memory
-    final static String FNAME_BASE = "data_bin/buf_data";
+    final String FNAME_BASE;     // base dir path to bin files
 
-    InfiniteSizedBuffer(int inMemSize, double dumpPct) {
+    InfiniteSizedBuffer(int inMemSize, double dumpPct, String fnameBase) {
         buffer = new double[inMemSize];
         headPtr = 0;
         bufferSize = 0;
         dumpPoint = dumpPct / 100;
         fileCtr = 0;
+        FNAME_BASE = fnameBase;
 
         // Create parent directory if it doesn't exist
         File f = new File(FNAME_BASE);
@@ -44,7 +44,11 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         }
     }
 
-    public static void main(String[] args) throws FileNotFoundException, IOException {
+    InfiniteSizedBuffer(int inMemSize, double dumpPct) {
+        this(inMemSize, dumpPct, "data_bin/buf_data");
+    }
+
+    public static void main(String[] args) {
         try (InfiniteSizedBuffer isb = new InfiniteSizedBuffer(10, 90)) {
             int bufSize = 50;
             // Write into buffer
