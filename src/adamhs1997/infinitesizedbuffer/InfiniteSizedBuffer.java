@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 
 public class InfiniteSizedBuffer implements AutoCloseable {
 
@@ -75,6 +76,29 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         }
     }
 
+    public void writeMultiple(double[] data) {
+        int amtWritten = 0;
+        while (amtWritten != data.length) {
+            int amtInsertable = Math.min(buffer.length - headPtr,
+                    data.length - amtWritten);
+            System.arraycopy(data, amtWritten, buffer, headPtr, amtInsertable);
+            headPtr += amtInsertable;
+            bufferSize += amtInsertable;
+            maxHeadPtr += amtInsertable;
+            amtWritten += amtInsertable;
+            if (headPtr == buffer.length)
+                dumpData();
+            System.out.println(amtWritten + " " + amtInsertable);
+            System.out.println(Arrays.toString(buffer));
+//            int amtToOverwrite = data.length - amtInsertable;
+//            System.arraycopy(data, data.length - amtToOverwrite, buffer, 0,
+//                    amtToOverwrite);
+//            end = (end + items.length > buffer.length) ?
+//                    amtToOverwrite : end + items.length;
+//            amtWritten = data.length;
+        }
+    }
+
     /**
      * Read an item from the buffer.
      * @return Newest item in the buffer.
@@ -96,6 +120,10 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         headPtr--;
 
         return buffer[headPtr];
+    }
+
+    public void readRange(int startIdx, int endIdx) {
+        // TODO
     }
 
     /**
@@ -184,34 +212,4 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         }
     }
 
-    // For testing...
-    public static void main(String[] args) {
-        try (InfiniteSizedBuffer isb = new InfiniteSizedBuffer(10, 30)) {
-            int bufSize = 100;
-            // Write into buffer
-            for (int i = 0; i < bufSize; i++) {
-                isb.writeData(i);
-
-                // Simulate some reads interrupting the write stream
-                if (i == 23) {
-                    for (int j = 0; j < 7; j++) {
-                        System.out.println(isb.readData());
-                    }
-                    System.out.println("----");
-                }
-
-                if (i == 44) {
-                    for (int j = 0; j < 23; j++) {
-                        System.out.println(isb.readData());
-                    }
-                    System.out.println("----");
-                }
-            }
-
-            // Recover all data from buffer
-            for (int i = isb.getBufferSize(); i > 0; i--) {
-                System.out.println(isb.readData());
-            }
-        }
-    }
 }
