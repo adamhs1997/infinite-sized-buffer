@@ -8,16 +8,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
-/*
-Create buffer of fixed size
-Whenever buffer gets within x% of its actual size, write that back out to a file
-When rewinding, we must dump out current data when we get back to the start of it
-
-When buffering new data:
---As soon as head ptr passes x% threshold, have bkgd thread go thorugh and write that data.
---Lock the buffer to prevent new writes, then move new data to start
---Reset head ptr to end of current data, overwrite leftover data in array
- */
 public class InfiniteSizedBuffer implements AutoCloseable {
 
     private double[] buffer;     // array to back the buffer
