@@ -7,7 +7,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 
 public class InfiniteSizedBuffer implements AutoCloseable {
 
@@ -76,6 +75,10 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         }
     }
 
+    /**
+     * Write multiple items into the buffer.
+     * @param data Array of data items to write into buffer.
+     */
     public void writeMultiple(double[] data) {
         int amtWritten = 0;
         while (amtWritten != data.length) {
@@ -88,14 +91,6 @@ public class InfiniteSizedBuffer implements AutoCloseable {
             amtWritten += amtInsertable;
             if (headPtr == buffer.length)
                 dumpData();
-            System.out.println(amtWritten + " " + amtInsertable);
-            System.out.println(Arrays.toString(buffer));
-//            int amtToOverwrite = data.length - amtInsertable;
-//            System.arraycopy(data, data.length - amtToOverwrite, buffer, 0,
-//                    amtToOverwrite);
-//            end = (end + items.length > buffer.length) ?
-//                    amtToOverwrite : end + items.length;
-//            amtWritten = data.length;
         }
     }
 
@@ -106,12 +101,8 @@ public class InfiniteSizedBuffer implements AutoCloseable {
     public double readData() {
         // Retrieve more data when we need it
         if (headPtr == 0) {
-            // If the current data is still in, must evict it
-            if (!currentOut) {
-                currentOut = true;
-                writeInMemData();
-                fileCtr--;
-            }
+            // If the current data is still in, must account for that in ctr
+            if (!currentOut) fileCtr--;
 
             loadBlock(DIR_NAME_BASE + fileCtr-- + ".bin");
         }
@@ -122,8 +113,73 @@ public class InfiniteSizedBuffer implements AutoCloseable {
         return buffer[headPtr];
     }
 
-    public void readRange(int startIdx, int endIdx) {
-        // TODO
+    public double[] readRange(int startIdx, int endIdx) {
+        // Check if is valid range
+        if (startIdx > endIdx)
+            throw new IllegalArgumentException(
+                    "Start index must be less than end index!");
+        if (startIdx > bufferSize || endIdx > bufferSize)
+            throw new IllegalArgumentException("Indices out of range!");
+
+        // Create place to hold the data
+        double[] result = new double[endIdx - startIdx];
+
+        // Figure out starting block number
+        int startBlock = startIdx / stopIdx;
+        int startPos = startIdx % stopIdx;
+        if (startBlock < maxFileCtr) {
+            // Block is not in memory already
+            loadBlock(DIR_NAME_BASE + startBlock + ".bin");
+        } else if (currentOut) {
+            // Means current data not in memory
+            loadBlock(DIR_NAME_BASE + "x.bin");
+            currentOut = false;
+        }
+
+        // Figure out ending block number
+        int endBlock = endIdx / stopIdx;
+        if (startBlock == endBlock || startBlock == maxFileCtr) {
+            // This is likely going to be the case. If not, start is likely in
+            //  the block right before the end index. It would be rare to need
+            //  all of multiple blocks in between.
+            // The second condition covers the case where both start and end of
+            //  the selection are in the newest data section, but would be
+            //  broken into different blocks later
+            // In this case, we just copy out data in the buffer range
+            startPos = Math.max(startPos,
+                    startPos + stopIdx * (startBlock - maxFileCtr));
+            System.arraycopy(buffer, startPos, result, 0, result.length);
+        }
+
+        else {
+            // We have multiple blocks to read from
+            // Copy data from the first block first
+            int resultPos = stopIdx - startPos;
+            System.arraycopy(buffer, startPos, result, 0, resultPos);
+
+            // Get any in-between blocks
+            int lastBlock = Math.min(endBlock, maxFileCtr);
+            for (int i = startBlock + 1; i < lastBlock; i++) {
+                loadBlock(DIR_NAME_BASE + i + ".bin");
+                System.arraycopy(buffer, 0, result, resultPos, stopIdx);
+                resultPos += stopIdx;
+            }
+
+            // Get remaining data
+            if (endBlock >= maxFileCtr) {
+                // If endBlock is gte maxFileCtr, get current data from block x
+                // Must be gte because buffer of last items may be bigger than
+                //  other blocks, so may not divide so cleanly into block #s
+                loadBlock(DIR_NAME_BASE + "x.bin");
+                currentOut = false;
+            } else {
+                // Load another regular block
+                loadBlock(DIR_NAME_BASE + endBlock + ".bin");
+            }
+            System.arraycopy(buffer, 0, result, resultPos, result.length - resultPos);
+        }
+
+        return result;
     }
 
     /**
@@ -194,6 +250,13 @@ public class InfiniteSizedBuffer implements AutoCloseable {
      * @param blockName Name of (path to) the data block to retrieve.
      */
     private void loadBlock(String blockName) {
+        // Evict current data if needed
+        if (!currentOut && !blockName.endsWith("x.bin")) {
+            currentOut = true;
+            writeInMemData();
+        }
+
+        // Load in requested block
         try (DataInputStream dis = new DataInputStream(
           new FileInputStream(blockName))) {
             headPtr = 0;
