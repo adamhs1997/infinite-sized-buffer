@@ -1,5 +1,7 @@
 package adamhs1997.infinitesizedbuffer;
 
+import java.util.Arrays;
+
 public class ISBTester {
 
     // For testing...
@@ -12,7 +14,9 @@ public class ISBTester {
             for (int i = 0; i < isb.getBufferSize(); i++) {
                 System.out.println(isb.readData());
             }
-            System.out.println(isb);
+            // Reads base idx -> end - 1
+            System.out.println("end " + Arrays.toString(isb.readRange(3, 23)));
+
         }
     }
 
